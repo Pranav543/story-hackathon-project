@@ -1,0 +1,34 @@
+{
+  "name": "story-hackathon-project",
+  "version": "1.0.0",
+  "description": "**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Pranav543/story-hackathon-project.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Pranav543/story-hackathon-project/issues"
+  },
+  "homepage": "https://github.com/Pranav543/story-hackathon-project#readme",
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.2.0",
+    "@story-protocol/protocol-core": "github:storyprotocol/protocol-core-v1",
+    "erc6551": "^0.3.1",
+    "solady": "^0.1.19"
+  },
+  "devDependencies": {
+    "ds-test": "github:dapphub/ds-test",
+    "forge-std": "github:foundry-rs/forge-std#v1.7.6"
+  }
+}

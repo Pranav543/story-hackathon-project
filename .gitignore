@@ -10,5 +10,39 @@ out/
 # Docs
 docs/
 
-# Dotenv file
+# Ignore macOS system files
+.DS_Store
+
+# Ignore node_modules (if using Node.js)
+node_modules/
+
+# Ignore log files
+*.log
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# Ignore environment files
 .env
+
+# Ignore IDE-specific files
+.vscode/
+.idea/
+
+# Ignore build artifacts
+dist/
+build/
+
+# Ignore coverage reports
+coverage/
+*.lcov
+
+# Ignore temporary files
+*.tmp
+*.swp
+*.bak
+
+# Ignore generated files
+*.out
+*.class
