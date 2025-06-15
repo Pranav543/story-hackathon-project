@@ -1,0 +1,10 @@
+{
+  "transactions": [
+    {
+      "rpc": "https://aeneid.storyrpc.io/"
+    },
+    {
+      "rpc": "https://aeneid.storyrpc.io/"
+    }
+  ]
+}

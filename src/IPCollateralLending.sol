@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.26;
 
-import { IIPAssetRegistry } from "@storyprotocol/core/interfaces/registries/IIPAssetRegistry.sol";
-import { ILicenseRegistry } from "@storyprotocol/core/interfaces/registries/ILicenseRegistry.sol";
-import { IRoyaltyModule } from "@storyprotocol/core/interfaces/modules/royalty/IRoyaltyModule.sol";
-import { IPILicenseTemplate } from "@storyprotocol/core/interfaces/modules/licensing/IPILicenseTemplate.sol";
-import { ILicensingModule } from "@storyprotocol/core/interfaces/modules/licensing/ILicensingModule.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import {IIPAssetRegistry} from "@storyprotocol/core/interfaces/registries/IIPAssetRegistry.sol";
+import {ILicenseRegistry} from "@storyprotocol/core/interfaces/registries/ILicenseRegistry.sol";
+import {IRoyaltyModule} from "@storyprotocol/core/interfaces/modules/royalty/IRoyaltyModule.sol";
+import {IPILicenseTemplate} from "@storyprotocol/core/interfaces/modules/licensing/IPILicenseTemplate.sol";
+import {ILicensingModule} from "@storyprotocol/core/interfaces/modules/licensing/ILicensingModule.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract IPCollateralLending is ReentrancyGuard, Ownable {
     /*//////////////////////////////////////////////////////////////
@@ -28,16 +28,19 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
         bool isActive;
         bool isRepaid;
         LoanStatus status;
-        uint256 sourceChainId; // Chain where borrower is located
+        uint256 sourceChainId;
     }
 
     struct IPCollateral {
         address ipAsset;
         uint256 assessedValue;
-        uint256 riskScore; // 0-100, lower is better
+        uint256 riskScore;
         bool isEligible;
         uint256 lastValidated;
-        bytes32 yakoaHash; // Yakoa verification hash
+        bytes32 yakoaHash;
+        string yakoaTokenId;
+        YakoaStatus yakoaStatus;
+        uint256 yakoaTimestamp;
     }
 
     struct CrossChainRepayment {
@@ -60,6 +63,35 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
         CROSS_CHAIN_REPAYMENT_PENDING
     }
 
+    enum YakoaStatus {
+        PENDING,
+        VERIFIED,
+        REJECTED,
+        ERROR
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            CUSTOM ERRORS
+//////////////////////////////////////////////////////////////*/
+
+    error IPNotRegistered();
+    error IPNotVerifiedByYakoa();
+    error IPNotEligibleAsCollateral();
+    error TokenNotSupported();
+    error NotIPOwner();
+    error LoanAmountExceedsLTV();
+    error LoanNotActive();
+    error NotBorrower();
+    error NotAuthorized();
+    error LoanNotLiquidatable();
+    error YakoaTokenNotFound();
+    error VerificationAlreadyCompleted();
+    error VerificationNotTimedOut();
+    error InsufficientRepaymentAmount();
+    error RepaymentAlreadyCompleted();
+    error InvalidLoanID();
+    error InvalidYakoaTokenID();
+
     /*//////////////////////////////////////////////////////////////
                                 EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -73,19 +105,41 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
         uint256 sourceChainId
     );
 
-    event LoanRepaid(uint256 indexed loanId, address indexed borrower, uint256 amount);
+    event LoanRepaid(
+        uint256 indexed loanId,
+        address indexed borrower,
+        uint256 amount
+    );
     event CrossChainRepaymentInitiated(
         uint256 indexed loanId,
         address indexed borrower,
         uint256 sourceChainId,
         bytes32 deBridgeOrderId
     );
-    event CrossChainRepaymentCompleted(uint256 indexed loanId, bytes32 deBridgeOrderId);
+    event CrossChainRepaymentCompleted(
+        uint256 indexed loanId,
+        bytes32 deBridgeOrderId
+    );
     event LoanLiquidated(uint256 indexed loanId, address indexed liquidator);
-    event IPCollateralValidated(address indexed ipAsset, uint256 assessedValue, uint256 riskScore);
+    event IPCollateralValidated(
+        address indexed ipAsset,
+        uint256 assessedValue,
+        uint256 riskScore,
+        string yakoaTokenId
+    );
+    event YakoaVerificationStarted(
+        address indexed ipAsset,
+        string yakoaTokenId
+    );
+    event YakoaVerificationCompleted(
+        address indexed ipAsset,
+        string yakoaTokenId,
+        YakoaStatus status,
+        bool isEligible
+    );
     event CrossChainLiquidityAdded(
-        address indexed token, 
-        uint256 amount, 
+        address indexed token,
+        uint256 amount,
         uint256 sourceChain,
         bytes32 deBridgeOrderId
     );
@@ -106,18 +160,19 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
     mapping(address => IPCollateral) public ipCollaterals;
     mapping(address => uint256[]) public userLoans;
     mapping(address => bool) public supportedTokens;
-    mapping(uint256 => address) public chainBridges; // chainId => bridge contract
-    mapping(bytes32 => CrossChainRepayment) public crossChainRepayments; // deBridge orderId => repayment info
-    mapping(uint256 => bytes32) public loanToOrderId; // loanId => deBridge orderId
+    mapping(uint256 => address) public chainBridges;
+    mapping(bytes32 => CrossChainRepayment) public crossChainRepayments;
+    mapping(uint256 => bytes32) public loanToOrderId;
+    mapping(string => address) public yakoaTokenToIpAsset;
 
     uint256 public nextLoanId;
-    uint256 public constant MAX_LTV = 70; // 70% Loan-to-Value ratio
-    uint256 public constant LIQUIDATION_THRESHOLD = 85; // 85% liquidation threshold
-    uint256 public constant BASE_INTEREST_RATE = 500; // 5% base rate (in basis points)
-    
-    // deBridge configuration
-    string public constant DEBRIDGE_API_URL = "https://dln.debridge.finance/v1.0/dln/order/create-tx";
-    uint256 public constant STORY_CHAIN_ID = 100000013; // Story mainnet chain ID
+    uint256 public constant MAX_LTV = 70;
+    uint256 public constant LIQUIDATION_THRESHOLD = 85;
+    uint256 public constant BASE_INTEREST_RATE = 500;
+
+    // Yakoa configuration
+    string public constant YAKOA_NETWORK = "story";
+    uint256 public constant YAKOA_VERIFICATION_TIMEOUT = 24 hours;
 
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
@@ -138,36 +193,117 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
     }
 
     /*//////////////////////////////////////////////////////////////
-                            CORE FUNCTIONS
+                            YAKOA INTEGRATION
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Validates IP asset for use as collateral using Yakoa
-     * @param ipAsset The IP asset to validate
-     * @param yakoaProof Yakoa authenticity proof
+     * @notice Initiates Yakoa verification for an IP asset
+     * @param ipAsset The IP asset to verify
+     * @param yakoaTokenId The Yakoa token identifier from frontend
      * @param assessedValue The assessed value of the IP asset
      */
-    function validateIPCollateral(
+    function initiateYakoaVerification(
         address ipAsset,
-        bytes32 yakoaProof,
+        string memory yakoaTokenId,
         uint256 assessedValue
     ) external onlyOwner {
-        require(IP_ASSET_REGISTRY.isRegistered(ipAsset), "IP not registered");
-        
-        uint256 riskScore = _calculateRiskScore(ipAsset, yakoaProof);
-        bool isEligible = riskScore < 30;
-        
+        if (!IP_ASSET_REGISTRY.isRegistered(ipAsset)) revert IPNotRegistered();
+        if (bytes(yakoaTokenId).length == 0) revert InvalidYakoaTokenID();
+
         ipCollaterals[ipAsset] = IPCollateral({
             ipAsset: ipAsset,
             assessedValue: assessedValue,
-            riskScore: riskScore,
-            isEligible: isEligible,
+            riskScore: 100,
+            isEligible: false,
             lastValidated: block.timestamp,
-            yakoaHash: yakoaProof
+            yakoaHash: keccak256(abi.encodePacked(yakoaTokenId)),
+            yakoaTokenId: yakoaTokenId,
+            yakoaStatus: YakoaStatus.PENDING,
+            yakoaTimestamp: block.timestamp
         });
 
-        emit IPCollateralValidated(ipAsset, assessedValue, riskScore);
+        yakoaTokenToIpAsset[yakoaTokenId] = ipAsset;
+
+        emit YakoaVerificationStarted(ipAsset, yakoaTokenId);
     }
+
+    /**
+     * @notice Updates the result of Yakoa verification
+     * @param yakoaTokenId The Yakoa token identifier
+     * @param isVerified Whether the content passed Yakoa verification
+     * @param riskScore The calculated risk score (0-100)
+     */
+    function updateYakoaVerification(
+        string memory yakoaTokenId,
+        bool isVerified,
+        uint256 riskScore
+    ) external onlyOwner {
+        address ipAsset = yakoaTokenToIpAsset[yakoaTokenId];
+        if (ipAsset == address(0)) revert YakoaTokenNotFound();
+
+        IPCollateral storage collateral = ipCollaterals[ipAsset];
+        if (collateral.yakoaStatus != YakoaStatus.PENDING)
+            revert VerificationAlreadyCompleted();
+
+        if (isVerified && riskScore < 30) {
+            collateral.yakoaStatus = YakoaStatus.VERIFIED;
+            collateral.isEligible = true;
+            collateral.riskScore = riskScore;
+        } else {
+            collateral.yakoaStatus = YakoaStatus.REJECTED;
+            collateral.isEligible = false;
+            collateral.riskScore = riskScore;
+        }
+
+        collateral.lastValidated = block.timestamp;
+
+        emit YakoaVerificationCompleted(
+            ipAsset,
+            yakoaTokenId,
+            collateral.yakoaStatus,
+            collateral.isEligible
+        );
+        emit IPCollateralValidated(
+            ipAsset,
+            collateral.assessedValue,
+            collateral.riskScore,
+            yakoaTokenId
+        );
+    }
+
+    /**
+     * @notice Handles Yakoa verification timeout
+     * @param yakoaTokenId The Yakoa token identifier that timed out
+     */
+    function handleYakoaTimeout(string memory yakoaTokenId) external onlyOwner {
+        address ipAsset = yakoaTokenToIpAsset[yakoaTokenId];
+        require(ipAsset != address(0), "Yakoa token not found");
+
+        IPCollateral storage collateral = ipCollaterals[ipAsset];
+        require(
+            collateral.yakoaStatus == YakoaStatus.PENDING,
+            "Verification already completed"
+        );
+        require(
+            block.timestamp >
+                collateral.yakoaTimestamp + YAKOA_VERIFICATION_TIMEOUT,
+            "Verification not timed out yet"
+        );
+
+        collateral.yakoaStatus = YakoaStatus.ERROR;
+        collateral.isEligible = false;
+
+        emit YakoaVerificationCompleted(
+            ipAsset,
+            yakoaTokenId,
+            YakoaStatus.ERROR,
+            false
+        );
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            CORE FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /**
      * @notice Creates a new loan using IP asset as collateral
@@ -175,7 +311,15 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
      * @param loanAmount Amount to borrow
      * @param duration Loan duration in seconds
      * @param loanToken Token to borrow
-     * @param borrowerChainId Chain ID where borrower is located (for cross-chain repayments)
+     * @param borrowerChainId Chain ID where borrower is located
+     */
+    /**
+     * @notice Creates a new loan using IP asset as collateral
+     * @param ipAsset The IP asset to use as collateral
+     * @param loanAmount Amount to borrow
+     * @param duration Loan duration in seconds
+     * @param loanToken Token to borrow
+     * @param borrowerChainId Chain ID where borrower is located
      */
     function createLoan(
         address ipAsset,
@@ -185,15 +329,26 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
         uint256 borrowerChainId
     ) external nonReentrant {
         IPCollateral memory collateral = ipCollaterals[ipAsset];
-        require(collateral.isEligible, "IP not eligible as collateral");
-        require(supportedTokens[loanToken], "Token not supported");
-        require(_isIPOwner(ipAsset, msg.sender), "Not IP owner");
-        
+
+        // Check if IP asset is registered first
+        if (!IP_ASSET_REGISTRY.isRegistered(ipAsset)) revert IPNotRegistered();
+
+        // Check Yakoa verification status first (more specific error)
+        if (collateral.yakoaStatus != YakoaStatus.VERIFIED)
+            revert IPNotVerifiedByYakoa();
+
+        // Then check if eligible (this should be true if verified, but keeping as separate check)
+        if (!collateral.isEligible) revert IPNotEligibleAsCollateral();
+
+        // Check other requirements
+        if (!supportedTokens[loanToken]) revert TokenNotSupported();
+        if (!_isIPOwner(ipAsset, msg.sender)) revert NotIPOwner();
+
         uint256 maxLoanAmount = (collateral.assessedValue * MAX_LTV) / 100;
-        require(loanAmount <= maxLoanAmount, "Loan amount exceeds LTV");
-        
+        if (loanAmount > maxLoanAmount) revert LoanAmountExceedsLTV();
+
         uint256 interestRate = _calculateInterestRate(collateral.riskScore);
-        
+
         uint256 loanId = nextLoanId++;
         loans[loanId] = Loan({
             borrower: msg.sender,
@@ -209,11 +364,18 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
             status: LoanStatus.ACTIVE,
             sourceChainId: borrowerChainId
         });
-        
+
         userLoans[msg.sender].push(loanId);
         IERC20(loanToken).transfer(msg.sender, loanAmount);
-        
-        emit LoanCreated(loanId, msg.sender, ipAsset, loanAmount, collateral.assessedValue, borrowerChainId);
+
+        emit LoanCreated(
+            loanId,
+            msg.sender,
+            ipAsset,
+            loanAmount,
+            collateral.assessedValue,
+            borrowerChainId
+        );
     }
 
     /**
@@ -222,16 +384,20 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
      */
     function repayLoan(uint256 loanId) external nonReentrant {
         Loan storage loan = loans[loanId];
-        require(loan.isActive, "Loan not active");
-        require(loan.borrower == msg.sender, "Not borrower");
-        
+        if (!loan.isActive) revert LoanNotActive();
+        if (loan.borrower != msg.sender) revert NotBorrower();
+
         uint256 totalOwed = _calculateTotalOwed(loanId);
-        IERC20(loan.loanToken).transferFrom(msg.sender, address(this), totalOwed);
-        
+        IERC20(loan.loanToken).transferFrom(
+            msg.sender,
+            address(this),
+            totalOwed
+        );
+
         loan.isActive = false;
         loan.isRepaid = true;
         loan.status = LoanStatus.REPAID;
-        
+
         emit LoanRepaid(loanId, msg.sender, totalOwed);
     }
 
@@ -249,23 +415,26 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
     ) external nonReentrant {
         Loan storage loan = loans[loanId];
         require(loan.isActive, "Loan not active");
-        require(loan.status == LoanStatus.CROSS_CHAIN_REPAYMENT_PENDING, "Not pending cross-chain repayment");
-        
-        CrossChainRepayment storage repayment = crossChainRepayments[deBridgeOrderId];
+        require(
+            loan.status == LoanStatus.CROSS_CHAIN_REPAYMENT_PENDING,
+            "Not pending cross-chain repayment"
+        );
+
+        CrossChainRepayment storage repayment = crossChainRepayments[
+            deBridgeOrderId
+        ];
         require(repayment.loanId == loanId, "Invalid loan ID");
         require(!repayment.isCompleted, "Repayment already completed");
-        
+
         uint256 totalOwed = _calculateTotalOwed(loanId);
         require(repaymentAmount >= totalOwed, "Insufficient repayment amount");
-        
-        // Mark loan as repaid
+
         loan.isActive = false;
         loan.isRepaid = true;
         loan.status = LoanStatus.REPAID;
-        
-        // Mark repayment as completed
+
         repayment.isCompleted = true;
-        
+
         emit CrossChainRepaymentCompleted(loanId, deBridgeOrderId);
         emit LoanRepaid(loanId, loan.borrower, repaymentAmount);
     }
@@ -288,11 +457,14 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
     ) external {
         Loan storage loan = loans[loanId];
         require(loan.isActive, "Loan not active");
-        require(loan.borrower == msg.sender || msg.sender == owner(), "Not authorized");
-        
+        require(
+            loan.borrower == msg.sender || msg.sender == owner(),
+            "Not authorized"
+        );
+
         loan.status = LoanStatus.CROSS_CHAIN_REPAYMENT_PENDING;
         loanToOrderId[loanId] = deBridgeOrderId;
-        
+
         crossChainRepayments[deBridgeOrderId] = CrossChainRepayment({
             loanId: loanId,
             borrower: loan.borrower,
@@ -303,8 +475,13 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
             timestamp: block.timestamp,
             isCompleted: false
         });
-        
-        emit CrossChainRepaymentInitiated(loanId, loan.borrower, sourceChainId, deBridgeOrderId);
+
+        emit CrossChainRepaymentInitiated(
+            loanId,
+            loan.borrower,
+            sourceChainId,
+            deBridgeOrderId
+        );
     }
 
     /**
@@ -315,10 +492,10 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
         Loan storage loan = loans[loanId];
         require(loan.isActive, "Loan not active");
         require(_isLiquidatable(loanId), "Loan not liquidatable");
-        
+
         loan.isActive = false;
         loan.status = LoanStatus.LIQUIDATED;
-        
+
         emit LoanLiquidated(loanId, msg.sender);
     }
 
@@ -340,11 +517,13 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
         bytes32 deBridgeOrderId
     ) external nonReentrant {
         require(supportedTokens[token], "Token not supported");
-        
-        // In production, verify the caller is authorized (deBridge executor)
-        // For now, we'll accept any caller for testing
-        
-        emit CrossChainLiquidityAdded(token, amount, sourceChain, deBridgeOrderId);
+
+        emit CrossChainLiquidityAdded(
+            token,
+            amount,
+            sourceChain,
+            deBridgeOrderId
+        );
     }
 
     /**
@@ -359,7 +538,7 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
         uint256 sourceChain
     ) external {
         require(supportedTokens[token], "Token not supported");
-        
+
         emit CrossChainLiquidityAdded(token, amount, sourceChain, bytes32(0));
     }
 
@@ -371,56 +550,84 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
         return loans[loanId];
     }
 
-    function getUserLoans(address user) external view returns (uint256[] memory) {
+    function getUserLoans(
+        address user
+    ) external view returns (uint256[] memory) {
         return userLoans[user];
     }
 
-    function calculateTotalOwed(uint256 loanId) external view returns (uint256) {
+    function calculateTotalOwed(
+        uint256 loanId
+    ) external view returns (uint256) {
         return _calculateTotalOwed(loanId);
     }
 
-    function getIPCollateral(address ipAsset) external view returns (IPCollateral memory) {
+    function getIPCollateral(
+        address ipAsset
+    ) external view returns (IPCollateral memory) {
         return ipCollaterals[ipAsset];
     }
 
-    function getCrossChainRepayment(bytes32 deBridgeOrderId) external view returns (CrossChainRepayment memory) {
+    function getCrossChainRepayment(
+        bytes32 deBridgeOrderId
+    ) external view returns (CrossChainRepayment memory) {
         return crossChainRepayments[deBridgeOrderId];
+    }
+
+    function getYakoaStatus(
+        string memory yakoaTokenId
+    ) external view returns (address ipAsset, YakoaStatus status) {
+        ipAsset = yakoaTokenToIpAsset[yakoaTokenId];
+        if (ipAsset != address(0)) {
+            status = ipCollaterals[ipAsset].yakoaStatus;
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
                           INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    function _calculateRiskScore(address ipAsset, bytes32 yakoaProof) internal view returns (uint256) {
+    function _calculateRiskScore(
+        address ipAsset,
+        bytes32 yakoaProof
+    ) internal view returns (uint256) {
         uint256 baseScore = 20;
-        
+
         if (LICENSE_REGISTRY.getAttachedLicenseTermsCount(ipAsset) > 0) {
             baseScore -= 5;
         }
-        
+
         if (LICENSE_REGISTRY.hasDerivativeIps(ipAsset)) {
             baseScore -= 5;
         }
-        
+
         if (yakoaProof != bytes32(0)) {
             baseScore -= 10;
         }
-        
+
         return baseScore;
     }
 
-    function _calculateInterestRate(uint256 riskScore) internal pure returns (uint256) {
+    function _calculateInterestRate(
+        uint256 riskScore
+    ) internal pure returns (uint256) {
         return BASE_INTEREST_RATE + (riskScore * 10);
     }
 
-    function _calculateTotalOwed(uint256 loanId) internal view returns (uint256) {
+    function _calculateTotalOwed(
+        uint256 loanId
+    ) internal view returns (uint256) {
         Loan memory loan = loans[loanId];
         uint256 timeElapsed = block.timestamp - loan.startTime;
-        uint256 interest = (loan.loanAmount * loan.interestRate * timeElapsed) / (365 days * 10000);
+        uint256 interest = (loan.loanAmount * loan.interestRate * timeElapsed) /
+            (365 days * 10000);
         return loan.loanAmount + interest;
     }
 
-    function _isIPOwner(address ipAsset, address user) internal view returns (bool) {
+    function _isIPOwner(
+        address ipAsset,
+        address user
+    ) internal view returns (bool) {
         if (!IP_ASSET_REGISTRY.isRegistered(ipAsset)) {
             return false;
         }
@@ -431,20 +638,27 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
         Loan memory loan = loans[loanId];
         uint256 totalOwed = _calculateTotalOwed(loanId);
         uint256 collateralRatio = (loan.collateralValue * 100) / totalOwed;
-        
-        return collateralRatio < LIQUIDATION_THRESHOLD || 
-               block.timestamp > loan.startTime + loan.duration;
+
+        return
+            collateralRatio < LIQUIDATION_THRESHOLD ||
+            block.timestamp > loan.startTime + loan.duration;
     }
 
     /*//////////////////////////////////////////////////////////////
                             ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    function setSupportedToken(address token, bool supported) external onlyOwner {
+    function setSupportedToken(
+        address token,
+        bool supported
+    ) external onlyOwner {
         supportedTokens[token] = supported;
     }
 
-    function setBridgeContract(uint256 chainId, address bridge) external onlyOwner {
+    function setBridgeContract(
+        uint256 chainId,
+        address bridge
+    ) external onlyOwner {
         chainBridges[chainId] = bridge;
     }
 
