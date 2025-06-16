@@ -140,7 +140,7 @@ contract DeBridgeIntegrationTest is Test {
 
         uint256 loanAmount = 50000e6;
         uint256 duration = 365 days;
-        uint256 borrowerChainId = 100000013;
+        uint256 borrowerChainId = 1315;
 
         vm.prank(alice);
         lendingProtocol.createLoan(ipAsset, loanAmount, duration, address(USDC), borrowerChainId);

@@ -1,13 +1,13 @@
-import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import '@rainbow-me/rainbowkit/styles.css';
 import { Providers } from './providers';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: 'IP Collateral Lending Protocol',
-  description: 'Secure loans using verified intellectual property as collateral',
+  description: 'Decentralized lending using IP assets as collateral',
 };
 
 export default function RootLayout({

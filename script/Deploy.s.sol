@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import { Script, console } from "forge-std/Script.sol";
 import { IPCollateralLending } from "../src/IPCollateralLending.sol";
+import { SimpleNFT } from "../src/mocks/SimpleNFT.sol";
 
 contract DeployScript is Script {
     function run() external {
@@ -16,8 +17,13 @@ contract DeployScript is Script {
         address royaltyModule = 0xD2f60c40fEbccf6311f8B47c4f2Ec6b040400086;
         address pilTemplate = 0x2E896b0b2Fdb7457499B56AAaA4AE55BCB4Cd316;
 
+        // Deploy SimpleNFT first
+        console.log("Deploying SimpleNFT...");
+        SimpleNFT simpleNFT = new SimpleNFT("IP Collateral NFTs", "IPCN");
+        console.log("SimpleNFT deployed at:", address(simpleNFT));
+
+        // Deploy IPCollateralLending
         console.log("Deploying IPCollateralLending...");
-        
         IPCollateralLending lendingProtocol = new IPCollateralLending(
             ipAssetRegistry,
             licenseRegistry,
@@ -25,16 +31,19 @@ contract DeployScript is Script {
             royaltyModule,
             pilTemplate
         );
-
         console.log("IPCollateralLending deployed at:", address(lendingProtocol));
         
         // Setup supported tokens
         console.log("Setting up supported tokens...");
         lendingProtocol.setSupportedToken(0xF2104833d386a2734a4eB3B8ad6FC6812F29E38E, true); // USDC
         
+        // Display deployment summary
+        console.log("\n=== DEPLOYMENT SUMMARY ===");
+        console.log("SimpleNFT Address:", address(simpleNFT));
+        console.log("IPCollateralLending Address:", address(lendingProtocol));
+        console.log("SimpleNFT Owner:", simpleNFT.owner());
+        console.log("LendingProtocol Owner:", lendingProtocol.owner());
         console.log("Deployment completed successfully!");
-        console.log("Contract Address:", address(lendingProtocol));
-        console.log("Owner:", lendingProtocol.owner());
 
         vm.stopBroadcast();
     }

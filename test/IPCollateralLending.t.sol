@@ -100,7 +100,7 @@ contract IPCollateralLendingTest is Test {
 
         uint256 loanAmount = 70000e6; // $70k
         uint256 duration = 365 days;
-        uint256 borrowerChainId = 100000013;
+        uint256 borrowerChainId = 1315;
 
         vm.prank(alice);
         lendingProtocol.createLoan(ipAsset, loanAmount, duration, address(USDC), borrowerChainId);
@@ -122,7 +122,7 @@ contract IPCollateralLendingTest is Test {
 
         uint256 loanAmount = 70000e6;
         uint256 duration = 365 days;
-        uint256 borrowerChainId = 100000013;
+        uint256 borrowerChainId = 1315;
 
         vm.prank(alice);
         // Now expect the custom error instead of string
@@ -134,7 +134,7 @@ contract IPCollateralLendingTest is Test {
         address unregisteredIP = address(0x123);
         uint256 loanAmount = 70000e6;
         uint256 duration = 365 days;
-        uint256 borrowerChainId = 100000013;
+        uint256 borrowerChainId = 1315;
 
         vm.prank(alice);
         vm.expectRevert(IPCollateralLending.IPNotRegistered.selector);
@@ -151,7 +151,7 @@ contract IPCollateralLendingTest is Test {
         address unsupportedToken = address(0x456);
         uint256 loanAmount = 70000e6;
         uint256 duration = 365 days;
-        uint256 borrowerChainId = 100000013;
+        uint256 borrowerChainId = 1315;
 
         vm.prank(alice);
         vm.expectRevert(IPCollateralLending.TokenNotSupported.selector);
@@ -168,7 +168,7 @@ contract IPCollateralLendingTest is Test {
 
         uint256 loanAmount = 50000e6;
         uint256 duration = 365 days;
-        uint256 borrowerChainId = 100000013;
+        uint256 borrowerChainId = 1315;
 
         vm.prank(alice);
         lendingProtocol.createLoan(ipAsset, loanAmount, duration, address(USDC), borrowerChainId);
@@ -197,7 +197,7 @@ contract IPCollateralLendingTest is Test {
 
         uint256 loanAmount = 50000e6;
         uint256 duration = 365 days;
-        uint256 borrowerChainId = 100000013;
+        uint256 borrowerChainId = 1315;
 
         vm.prank(alice);
         lendingProtocol.createLoan(ipAsset, loanAmount, duration, address(USDC), borrowerChainId);
@@ -221,7 +221,7 @@ contract IPCollateralLendingTest is Test {
 
         uint256 loanAmount = 70000e6;
         uint256 duration = 30 days;
-        uint256 borrowerChainId = 100000013;
+        uint256 borrowerChainId = 1315;
 
         vm.prank(alice);
         lendingProtocol.createLoan(ipAsset, loanAmount, duration, address(USDC), borrowerChainId);

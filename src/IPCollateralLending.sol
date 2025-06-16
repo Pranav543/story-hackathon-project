@@ -206,9 +206,13 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
         address ipAsset,
         string memory yakoaTokenId,
         uint256 assessedValue
-    ) external onlyOwner {
+    ) external {
+        // ✅ Remove onlyOwner modifier
         if (!IP_ASSET_REGISTRY.isRegistered(ipAsset)) revert IPNotRegistered();
         if (bytes(yakoaTokenId).length == 0) revert InvalidYakoaTokenID();
+
+        // Optional: Add IP owner check instead of contract owner
+        // if (!_isIPOwner(ipAsset, msg.sender)) revert NotIPOwner();
 
         ipCollaterals[ipAsset] = IPCollateral({
             ipAsset: ipAsset,
@@ -223,21 +227,18 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
         });
 
         yakoaTokenToIpAsset[yakoaTokenId] = ipAsset;
-
         emit YakoaVerificationStarted(ipAsset, yakoaTokenId);
     }
 
     /**
      * @notice Updates the result of Yakoa verification
-     * @param yakoaTokenId The Yakoa token identifier
-     * @param isVerified Whether the content passed Yakoa verification
-     * @param riskScore The calculated risk score (0-100)
      */
     function updateYakoaVerification(
         string memory yakoaTokenId,
         bool isVerified,
         uint256 riskScore
-    ) external onlyOwner {
+    ) external {
+        // ✅ Remove onlyOwner modifier
         address ipAsset = yakoaTokenToIpAsset[yakoaTokenId];
         if (ipAsset == address(0)) revert YakoaTokenNotFound();
 
@@ -262,12 +263,6 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
             yakoaTokenId,
             collateral.yakoaStatus,
             collateral.isEligible
-        );
-        emit IPCollateralValidated(
-            ipAsset,
-            collateral.assessedValue,
-            collateral.riskScore,
-            yakoaTokenId
         );
     }
 
@@ -631,7 +626,19 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
         if (!IP_ASSET_REGISTRY.isRegistered(ipAsset)) {
             return false;
         }
-        return true; // Simplified for MVP
+
+        // Get the token contract and token ID from the IP asset
+        // In a real implementation, you would query the IP asset registry
+        // For now, we'll use a simplified approach for the demo
+        try IP_ASSET_REGISTRY.ipId(block.chainid, address(0), 0) returns (
+            address
+        ) {
+            // If we can implement proper ownership check here, do it
+            // For demo purposes, allow any registered user
+            return true;
+        } catch {
+            return true; // Simplified for MVP - in production, implement proper ownership check
+        }
     }
 
     function _isLiquidatable(uint256 loanId) internal view returns (bool) {

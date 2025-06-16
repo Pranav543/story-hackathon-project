@@ -20,7 +20,7 @@ class DeBridgeAPIClient {
         lendingContract,
         borrower,
         sourceChainId = 1, // Ethereum
-        destinationChainId = 100000013, // Story
+        destinationChainId = 1315, // Story
         sourceToken = '0x0000000000000000000000000000000000000000', // ETH
         destinationToken = '0xF2104833d386a2734a4eB3B8ad6FC6812F29E38E', // USDC on Story
         sourceAmount = 'auto'
@@ -68,7 +68,7 @@ class DeBridgeAPIClient {
     async createLiquidityOrder({
         amount,
         sourceChainId,
-        destinationChainId = 100000013,
+        destinationChainId = 1315,
         lendingContract,
         provider,
         sourceToken,

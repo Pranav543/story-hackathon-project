@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fix input text visibility */
+input[type="text"],
+input[type="number"],
+textarea,
+select {
+  @apply text-gray-900 bg-white;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  input[type="text"],
+  input[type="number"],
+  textarea,
+  select {
+    @apply text-gray-100 bg-gray-800 border-gray-600;
+  }
+}
+
+/* Placeholder styling */
+input::placeholder,
+textarea::placeholder {
+  @apply text-gray-500;
+}
+
+/* Focus states */
+input:focus,
+textarea:focus,
+select:focus {
+  @apply ring-2 ring-blue-500 border-blue-500 outline-none;
+}
