@@ -46,3 +46,9 @@ coverage/
 # Ignore generated files
 *.out
 *.class
+
+# Ignore unnecessary folders
+forge-cache/
+broadcast/
+.github/
+
