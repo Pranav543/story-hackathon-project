@@ -9,6 +9,7 @@ out/
 
 # Docs
 docs/
+pts/
 
 # Ignore macOS system files
 .DS_Store
