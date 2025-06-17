@@ -1,5 +1,23 @@
 # IP Collateral Lending Protocol
 
+## Brief Protocol Flow
+
+1. **Create & Register IP Asset** - Mint NFT and register with Story Protocol
+2. **Verify IP Value** - Yakoa verification for collateral eligibility  
+3. **Create Loan** - Use verified IP as collateral for loan
+4. **Cross-Chain Funding** - deBridge triggers auto-funding from EVM lender
+5. **Assign Royalties** - Route IP royalties for automated repayment
+6. **Auto-Repayment** - Cross-chain royalty transfers repay loan
+7. **Release Collateral** - IP unlocked upon full repayment
+
+## Key Features
+- Cross-chain IP-backed lending
+- Automated royalty-based repayment  
+- Story Protocol + deBridge integration
+- Self-repaying loans through IP revenue
+
+**Result**: IP holders unlock liquidity while maintaining earning potential from their intellectual property assets.
+
 ## Step-by-Step Frontend Setup
 
 ### 1. Environment Configuration
