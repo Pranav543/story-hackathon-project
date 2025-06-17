@@ -1,9 +1,9 @@
 'use client';
 
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { getDefaultConfig } from '@tomo-inc/tomo-evm-kit'; // Changed from RainbowKit
 
 const storyTestnet = {
-  id: 1315, // Updated chain ID
+  id: 1315,
   name: 'Story Aeneid Testnet',
   nativeCurrency: {
     decimals: 18,
@@ -21,9 +21,9 @@ const storyTestnet = {
 } as const;
 
 export const config = getDefaultConfig({
+  clientId: process.env.NEXT_PUBLIC_TOMO_CLIENT_ID || '', // Added for Tomo
   appName: 'IP Collateral Lending',
-  projectId: '8d7e154eca3c014701f5380d7ba35073', // Get from WalletConnect
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '8d7e154eca3c014701f5380d7ba35073',
   chains: [storyTestnet],
   ssr: true,
 });
-

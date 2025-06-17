@@ -1,6 +1,6 @@
 import { Inter } from 'next/font/google';
 import './globals.css';
-import '@rainbow-me/rainbowkit/styles.css';
+import '@tomo-inc/tomo-evm-kit/styles.css'; // Changed from RainbowKit
 import { Providers } from './providers';
 
 const inter = Inter({ subsets: ['latin'] });
