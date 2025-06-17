@@ -10,7 +10,8 @@ solc = '0.8.26'
 fs_permissions = [
     { access = 'read', path = './out' }, 
     { access = 'read-write', path = './deploy-out' },
-    { access = 'read', path = './' }
+    { access = 'read', path = './' },
+    { access = "read-write", path = "./" }
 ]
 evm_version = 'cancun'
 remappings = [

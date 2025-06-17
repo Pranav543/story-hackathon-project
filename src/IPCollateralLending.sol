@@ -672,4 +672,108 @@ contract IPCollateralLending is ReentrancyGuard, Ownable {
     function withdrawToken(address token, uint256 amount) external onlyOwner {
         IERC20(token).transfer(owner(), amount);
     }
+
+
+    /**
+ * @notice Initiates cross-chain lending via deBridge
+ * @param loanId The loan ID
+ * @param targetChainId Target chain for lending
+ * @param targetLender Target lender contract address
+ */
+function initiateCrossChainLending(
+    uint256 loanId,
+    uint256 targetChainId,
+    address targetLender
+) external nonReentrant {
+    Loan storage loan = loans[loanId];
+    require(loan.isActive, "Loan not active");
+    require(loan.borrower == msg.sender, "Not borrower");
+    
+    // Create deBridge order ID
+    bytes32 deBridgeOrderId = keccak256(abi.encodePacked(loanId, block.timestamp, msg.sender));
+    
+    // Store the order for tracking
+    loanToOrderId[loanId] = deBridgeOrderId;
+    
+    emit CrossChainLendingInitiated(loanId, targetChainId, targetLender, deBridgeOrderId);
+}
+
+/**
+ * @notice Assigns royalty to IP asset for loan repayment
+ * @param loanId The loan ID
+ * @param royaltyPercentage Percentage of royalty (0-100)
+ */
+function assignRoyaltyToLoan(
+    uint256 loanId,
+    uint256 royaltyPercentage
+) external nonReentrant {
+    Loan storage loan = loans[loanId];
+    require(loan.isActive, "Loan not active");
+    require(loan.borrower == msg.sender, "Not borrower");
+    require(royaltyPercentage <= 100, "Invalid percentage");
+    
+    // Use Story's Royalty Module to assign royalty
+    address[] memory beneficiaries = new address[](1);
+    beneficiaries[0] = address(this); // Lending contract receives royalty
+    
+    uint256[] memory shares = new uint256[](1);
+    shares[0] = royaltyPercentage * 100; // Convert to basis points
+    
+    // This would call Story's RoyaltyModule in real implementation
+    // For demo, we'll emit an event to show the assignment
+    emit RoyaltyAssignedToLoan(loanId, loan.ipAsset, royaltyPercentage);
+}
+
+/**
+ * @notice Collects and transfers royalty cross-chain for loan repayment
+ * @param loanId The loan ID
+ * @param royaltyAmount Amount of royalty collected
+ * @param targetChainId Target chain for repayment
+ * @param targetLender Target lender address
+ */
+function collectAndTransferRoyalty(
+    uint256 loanId,
+    uint256 royaltyAmount,
+    uint256 targetChainId,
+    address targetLender
+) external nonReentrant {
+    Loan storage loan = loans[loanId];
+    require(loan.isActive, "Loan not active");
+    
+    // In real implementation, this would collect actual royalties from RoyaltyModule
+    // For demo, we'll simulate the collection and transfer
+    
+    bytes32 deBridgeOrderId = keccak256(abi.encodePacked("royalty", loanId, block.timestamp));
+    
+    // Check if royalty covers the debt
+    uint256 totalOwed = _calculateTotalOwed(loanId);
+    if (royaltyAmount >= totalOwed) {
+        loan.isActive = false;
+        loan.isRepaid = true;
+        loan.status = LoanStatus.REPAID;
+    }
+    
+    emit RoyaltyCollectedAndTransferred(loanId, royaltyAmount, targetChainId, deBridgeOrderId);
+}
+
+// Add these events to your contract
+event CrossChainLendingInitiated(
+    uint256 indexed loanId,
+    uint256 targetChainId,
+    address targetLender,
+    bytes32 deBridgeOrderId
+);
+
+event RoyaltyAssignedToLoan(
+    uint256 indexed loanId,
+    address indexed ipAsset,
+    uint256 royaltyPercentage
+);
+
+event RoyaltyCollectedAndTransferred(
+    uint256 indexed loanId,
+    uint256 royaltyAmount,
+    uint256 targetChainId,
+    bytes32 deBridgeOrderId
+);
 }
